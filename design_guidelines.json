@@ -1,0 +1,148 @@
+{
+  "theme": "light",
+  "archetype": "Swiss & High-Contrast",
+  "typography": {
+    "fonts_to_install": [
+      "@fontsource/outfit",
+      "@fontsource/ibm-plex-sans"
+    ],
+    "headings": {
+      "family": "Outfit, sans-serif",
+      "weight": "font-semibold to font-bold",
+      "tracking": "tracking-tight",
+      "colors": "text-slate-900"
+    },
+    "body": {
+      "family": "'IBM Plex Sans', sans-serif",
+      "weight": "font-normal",
+      "colors": "text-slate-700"
+    },
+    "numbers": {
+      "family": "'IBM Plex Sans', monospace",
+      "note": "Use tabular-nums for tables, totals, and invoices to ensure decimal alignment."
+    }
+  },
+  "colors": {
+    "primary": {
+      "DEFAULT": "#2563EB",
+      "hover": "#1D4ED8",
+      "foreground": "#FFFFFF"
+    },
+    "background": {
+      "app": "#F8FAFC",
+      "card": "#FFFFFF",
+      "print": "#FFFFFF"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "muted": "#94A3B8"
+    },
+    "status": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "danger": "#EF4444",
+      "info": "#3B82F6"
+    },
+    "borders": {
+      "subtle": "#E2E8F0",
+      "focus": "#2563EB"
+    }
+  },
+  "visual enhancers": {
+    "shadows": "shadow-sm for cards, shadow-md for hover states.",
+    "borders": "1px solid border-slate-200 for containers.",
+    "radius": "rounded-lg for main containers, rounded-md for inputs/buttons.",
+    "print_styles": "Use black and white strictly for print mode. -webkit-print-color-adjust: exact."
+  },
+  "component name": [
+    "DashboardStats",
+    "InventoryTable",
+    "CustomerList",
+    "InvoiceForm",
+    "InvoiceTotalSummary",
+    "PrintableInvoice",
+    "LowStockBanner"
+  ],
+  "grids": {
+    "stats": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+    "forms": "grid grid-cols-1 md:grid-cols-2 gap-6",
+    "invoice_line_items": "w-full text-left border-collapse"
+  },
+  "layouts": {
+    "dashboard": {
+      "container": "w-full min-h-screen bg-slate-50 flex flex-col md:flex-row",
+      "sidebar": "w-64 bg-slate-900 text-white min-h-screen hidden md:block",
+      "content": "flex-1 p-6 lg:p-10 space-y-8 overflow-y-auto"
+    },
+    "print_invoice": {
+      "wrapper": "print:block w-full max-w-4xl mx-auto",
+      "page_break": "print:break-after-page print:page-break-after-always",
+      "hide_on_print": "print:hidden",
+      "specifics": [
+        "Create an InvoicePrintComponent that repeats 3 times for Original, Duplicate, and Triplicate.",
+        "Add `@media print` rules in global css to force A4 size and hide non-print UI.",
+        "Ensure tables in print are border-collapse with solid black borders for clear physical printing."
+      ]
+    }
+  },
+  "motion": {
+    "hover": "Subtle background shifts and shadow elevation. No extreme bouncy animations for ERP.",
+    "active": "Slight scale down (scale-95) for buttons on click.",
+    "transitions": "Use transition-colors duration-200 ease-in-out for interactive elements."
+  },
+  "accessibility": {
+    "contrast": "Ensure text contrast meets WCAG AA standards. Use slate-700 or slate-900 for text.",
+    "forms": "All inputs must have associated labels. Use visual cues (red text/borders) for validation errors."
+  },
+  "media": {
+    "breakpoints": "Use standard Tailwind md (768px), lg (1024px), xl (1280px) breakpoints.",
+    "print": "Use @media print strictly to isolate print layout. Hide sidebar and navigation."
+  },
+  "3d libraries": {
+    "usage": "Not recommended for this dense billing/ERP application. Stick to fast, responsive 2D DOM elements."
+  },
+  "specific_flows": {
+    "billing_invoice_creation": [
+      "Select Customer from a searchable dropdown.",
+      "Dynamic line items: Add row, pick product from Inventory.",
+      "Auto-populate SKU, Price, and available stock.",
+      "Calculate Subtotal = Sum(Qty * Price).",
+      "Apply CGST/SGST (e.g., 9% each) and optional flat discount.",
+      "Calculate Grand Total. Show Amount in Words.",
+      "Save Invoice triggers Stock Deduction."
+    ],
+    "stock_management": [
+      "Show a warning badge if Qty added in invoice exceeds available stock.",
+      "Highlight low-stock items in the Inventory Table."
+    ]
+  },
+  "image_urls": {
+    "avatars": [
+      {
+        "url": "https://images.pexels.com/photos/9623645/pexels-photo-9623645.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "user_avatar",
+        "description": "Professional businessman avatar"
+      },
+      {
+        "url": "https://images.pexels.com/photos/36292200/pexels-photo-36292200.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "user_avatar_2",
+        "description": "Second professional avatar"
+      }
+    ]
+  },
+  "icons": {
+    "library": "lucide-react",
+    "instructions": "Use lucide-react for all interface icons (Dashboard, Inventory, Users, FileText, Printer, Plus, Trash)."
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Prioritize exact money communication. Use tabular-nums for all currency amounts.",
+    "Do NOT center-align the app container. Left-align dense data, right-align numbers/currency.",
+    "Never use `transition: all`. Use specific transitions like `transition-colors` or `transition-opacity`.",
+    "Include `data-testid` attributes on all interactive elements (buttons, inputs, rows) for testing.",
+    "For the Print Invoice feature, use `@media print` heavily. Ensure there's an iteration mechanism that renders the exact same invoice UI three times with the labels 'Original for Recipient', 'Duplicate for Transporter', and 'Triplicate for Supplier', with `page-break-after: always` separating them.",
+    "Use Shadcn UI components for complex interactions like dialogs or select menus, but standard HTML/Tailwind for the dense Invoice line-item tables to maintain fine-grained control over spacing and print layout.",
+    "Do not use transparent backgrounds for the header/nav.",
+    "Add 'sonner' for toast notifications (e.g., 'Invoice Saved', 'Stock Deducted')."
+  ]
+}
