@@ -1,28 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, formatINR } from "@/lib/api";
+import { sheets, formatINR } from "@/lib/sheets";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Save, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
-const emptyLine = { product_id: "", quantity: 1 };
+const emptyLine = { product_id: "", quantity: 1, price: "" };
 
 export default function NewBill() {
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [customerId, setCustomerId] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerGstin, setCustomerGstin] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [lines, setLines] = useState([{ ...emptyLine }]);
   const [cgstRate, setCgstRate] = useState(9);
   const [sgstRate, setSgstRate] = useState(9);
@@ -33,63 +31,69 @@ export default function NewBill() {
 
   useEffect(() => {
     (async () => {
-      const [c, p] = await Promise.all([api.get("/customers"), api.get("/products")]);
-      setCustomers(c.data);
-      setProducts(p.data);
+      try {
+        const stocks = await sheets.stock();
+        setProducts(stocks);
+      } catch (e) {
+        toast.error("Cannot load stock: " + e.message);
+      }
     })();
   }, []);
 
   const productById = useMemo(() => {
     const m = {};
-    for (const p of products) m[p.id] = p;
+    for (const p of products) m[p.product_id] = p;
     return m;
   }, [products]);
 
   const addLine = () => setLines([...lines, { ...emptyLine }]);
-  const removeLine = (idx) => setLines(lines.filter((_, i) => i !== idx));
-  const updateLine = (idx, patch) => {
-    setLines(lines.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-  };
+  const removeLine = (i) => setLines(lines.filter((_, idx) => idx !== i));
+  const updateLine = (i, patch) =>
+    setLines(lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
-  const enrichedLines = lines.map((l) => {
+  const enriched = lines.map((l) => {
     const p = productById[l.product_id];
+    const price = Number(l.price || 0);
     return {
       ...l,
       product: p,
-      price: p?.price || 0,
-      lineTotal: (p?.price || 0) * (Number(l.quantity) || 0),
+      price,
+      lineTotal: price * (Number(l.quantity) || 0),
       stockAvailable: p?.stock ?? 0,
       overstock: p ? Number(l.quantity) > p.stock : false,
     };
   });
 
-  const subtotal = enrichedLines.reduce((s, l) => s + l.lineTotal, 0);
+  const subtotal = enriched.reduce((s, l) => s + l.lineTotal, 0);
   const taxable = Math.max(subtotal - Number(discount || 0), 0);
   const cgstAmount = (taxable * Number(cgstRate || 0)) / 100;
   const sgstAmount = (taxable * Number(sgstRate || 0)) / 100;
   const grandTotal = taxable + cgstAmount + sgstAmount;
 
-  const hasOverstock = enrichedLines.some((l) => l.overstock);
-  const hasEmpty = enrichedLines.some((l) => !l.product_id || !(Number(l.quantity) > 0));
+  const hasOverstock = enriched.some((l) => l.overstock);
+  const hasEmpty = enriched.some(
+    (l) => !l.product_id || !(Number(l.quantity) > 0) || !(Number(l.price) > 0)
+  );
 
   const submit = async () => {
-    if (!customerId) return toast.error("Select a customer");
-    if (lines.length === 0 || hasEmpty)
-      return toast.error("Add at least one product with quantity > 0");
+    if (!customerName) return toast.error("Customer name is required");
+    if (hasEmpty) return toast.error("Each line needs product, quantity > 0 and price > 0");
     if (hasOverstock) return toast.error("Some items exceed available stock");
 
     setSaving(true);
     try {
       const payload = {
-        customer_id: customerId,
-        items: enrichedLines.map((l) => ({
-          product_id: l.product_id,
-          name: l.product.name,
-          sku: l.product.sku,
-          hsn: l.product.hsn || "",
-          price: l.product.price,
+        customer_name: customerName,
+        customer_gstin: customerGstin,
+        customer_phone: customerPhone,
+        customer_address: customerAddress,
+        items: enriched.map((l) => ({
+          product_id: l.product.product_id,
+          product_name: l.product.product_name,
+          hsn: "",
+          price: l.price,
           quantity: Number(l.quantity),
-          unit: l.product.unit,
+          unit: l.product.unit || "KGS",
         })),
         cgst_rate: Number(cgstRate),
         sgst_rate: Number(sgstRate),
@@ -97,12 +101,12 @@ export default function NewBill() {
         payment_status: paymentStatus,
         notes,
       };
-      const { data } = await api.post("/invoices", payload);
-      toast.success(`Invoice ${data.invoice_no} created. Stock deducted.`);
-      window.open(`/invoices/${data.id}/print`, "_blank");
+      const inv = await sheets.createInvoice(payload);
+      toast.success(`Invoice ${inv.invoice_no} created`);
+      window.open(`/invoices/${inv.id}/print`, "_blank");
       navigate("/billing");
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed to save invoice");
+      toast.error(e.message || "Save failed");
     } finally {
       setSaving(false);
     }
@@ -110,11 +114,13 @@ export default function NewBill() {
 
   return (
     <div className="space-y-6" data-testid="new-bill-page">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-display text-2xl font-semibold">New Bill</div>
-          <div className="text-sm text-slate-500">Create GST invoice with auto stock deduction</div>
-        </div>
+      <div>
+        <div className="text-orange-600 text-xs uppercase tracking-widest font-semibold">Overview</div>
+        <h1 className="font-display text-3xl font-semibold">New Bill</h1>
+        <p className="text-slate-600 mt-1 text-sm">
+          GST invoice with live total summary. On save, stock is deducted via a Sale transaction in
+          the Inventory sheet.
+        </p>
       </div>
 
       {hasOverstock && (
@@ -123,45 +129,46 @@ export default function NewBill() {
           data-testid="overstock-warning"
         >
           <AlertTriangle className="h-4 w-4 mt-0.5" />
-          <div className="text-sm">
-            One or more line items exceed available inventory. Adjust quantities before saving.
-          </div>
+          <div className="text-sm">One or more line items exceed available inventory.</div>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left – form */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="shadow-sm border border-slate-200">
-            <CardContent className="p-5 space-y-4">
+            <CardContent className="p-5">
+              <div className="font-display font-semibold text-lg mb-4">Customer</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Customer</Label>
-                  <Select value={customerId} onValueChange={setCustomerId}>
-                    <SelectTrigger data-testid="customer-select">
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id} data-testid={`customer-option-${c.name}`}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Name *</Label>
+                  <Input
+                    data-testid="customer-name"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Phone</Label>
+                  <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                </div>
+                <div>
+                  <Label>GSTIN</Label>
+                  <Input value={customerGstin} onChange={(e) => setCustomerGstin(e.target.value)} />
                 </div>
                 <div>
                   <Label>Payment Status</Label>
                   <Select value={paymentStatus} onValueChange={setPaymentStatus}>
-                    <SelectTrigger data-testid="payment-status-select">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Pending">Pending</SelectItem>
                       <SelectItem value="Partial">Partial</SelectItem>
                       <SelectItem value="Paid">Paid</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Address</Label>
+                  <Textarea value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} />
                 </div>
               </div>
             </CardContent>
@@ -171,114 +178,115 @@ export default function NewBill() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="font-display font-semibold text-lg">Line Items</div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={addLine}
-                  data-testid="add-line-btn"
-                >
+                <Button variant="outline" size="sm" onClick={addLine} data-testid="add-line-btn">
                   <Plus className="h-4 w-4 mr-1" /> Add Row
                 </Button>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm" data-testid="line-items-table">
-                  <thead>
-                    <tr className="text-left text-slate-600 border-b border-slate-200">
-                      <th className="py-2">Product</th>
-                      <th className="py-2 text-right">Price</th>
-                      <th className="py-2 text-right">Qty</th>
-                      <th className="py-2 text-right">Stock</th>
-                      <th className="py-2 text-right">Total</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {enrichedLines.map((l, idx) => (
-                      <tr key={idx} className="border-b border-slate-100" data-testid={`line-row-${idx}`}>
-                        <td className="py-2 pr-2 min-w-[200px]">
-                          <Select
-                            value={l.product_id}
-                            onValueChange={(v) => updateLine(idx, { product_id: v })}
-                          >
-                            <SelectTrigger data-testid={`line-product-select-${idx}`}>
-                              <SelectValue placeholder="Select product" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name} ({p.sku})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-2 text-right tabular">
-                          {l.product ? formatINR(l.price) : "-"}
-                        </td>
-                        <td className="py-2 text-right">
-                          <Input
-                            type="number"
-                            className="w-24 text-right tabular"
-                            min={1}
-                            data-testid={`line-qty-input-${idx}`}
-                            value={l.quantity}
-                            onChange={(e) => updateLine(idx, { quantity: e.target.value })}
-                          />
-                        </td>
-                        <td className="py-2 text-right tabular">
-                          <span
-                            className={
-                              l.overstock
-                                ? "text-red-600 font-semibold"
-                                : l.product && l.stockAvailable <= (l.product.low_stock_threshold ?? 5)
-                                ? "text-amber-600"
-                                : "text-slate-600"
-                            }
-                          >
-                            {l.product ? `${l.stockAvailable} ${l.product.unit}` : "-"}
-                          </span>
-                        </td>
-                        <td className="py-2 text-right tabular font-medium">
-                          {formatINR(l.lineTotal)}
-                        </td>
-                        <td className="py-2 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeLine(idx)}
-                            disabled={lines.length === 1}
-                            data-testid={`line-remove-btn-${idx}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </td>
+              {products.length === 0 ? (
+                <div className="text-sm text-slate-500 border border-dashed border-slate-300 rounded-md p-4 text-center">
+                  No products found in the Inventory sheet. Go to Inventory → Add New → create an
+                  "Opening Stock" entry for each product first.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="line-items-table">
+                    <thead>
+                      <tr className="text-left text-slate-500 uppercase text-[11px] tracking-wider border-b border-slate-200">
+                        <th className="py-2">Product</th>
+                        <th className="py-2 text-right">Price (₹)</th>
+                        <th className="py-2 text-right">Qty</th>
+                        <th className="py-2 text-right">Stock</th>
+                        <th className="py-2 text-right">Total</th>
+                        <th></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {enriched.map((l, i) => (
+                        <tr key={i} className="border-b border-slate-100" data-testid={`line-row-${i}`}>
+                          <td className="py-2 pr-2 min-w-[220px]">
+                            <Select
+                              value={l.product_id}
+                              onValueChange={(v) => updateLine(i, { product_id: v })}
+                            >
+                              <SelectTrigger data-testid={`line-product-${i}`}>
+                                <SelectValue placeholder="Select product" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {products.map((p) => (
+                                  <SelectItem key={p.product_id} value={p.product_id}>
+                                    {p.product_name} ({p.product_id}) • {p.stock} {p.unit}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-2 text-right">
+                            <Input
+                              type="number"
+                              className="w-28 text-right tabular"
+                              value={l.price}
+                              onChange={(e) => updateLine(i, { price: e.target.value })}
+                              data-testid={`line-price-${i}`}
+                            />
+                          </td>
+                          <td className="py-2 text-right">
+                            <Input
+                              type="number"
+                              className="w-24 text-right tabular"
+                              min={1}
+                              value={l.quantity}
+                              onChange={(e) => updateLine(i, { quantity: e.target.value })}
+                              data-testid={`line-qty-${i}`}
+                            />
+                          </td>
+                          <td className="py-2 text-right tabular">
+                            <span
+                              className={
+                                l.overstock
+                                  ? "text-red-600 font-semibold"
+                                  : l.product && l.stockAvailable <= 10
+                                  ? "text-amber-600"
+                                  : "text-slate-600"
+                              }
+                            >
+                              {l.product ? `${l.stockAvailable} ${l.product.unit || ""}` : "-"}
+                            </span>
+                          </td>
+                          <td className="py-2 text-right tabular font-medium">
+                            {formatINR(l.lineTotal)}
+                          </td>
+                          <td className="py-2 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeLine(i)}
+                              disabled={lines.length === 1}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           <Card className="shadow-sm border border-slate-200">
             <CardContent className="p-5">
               <Label>Notes</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional invoice notes / terms"
-              />
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional invoice notes / terms" />
             </CardContent>
           </Card>
         </div>
 
-        {/* Right – total summary */}
         <div>
           <Card className="shadow-sm border border-slate-200 sticky top-4" data-testid="total-summary-card">
             <CardContent className="p-5">
               <div className="font-display text-lg font-semibold mb-4">Total Summary</div>
-
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Subtotal</span>
@@ -286,7 +294,6 @@ export default function NewBill() {
                     {formatINR(subtotal)}
                   </span>
                 </div>
-
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-slate-600">Discount (₹)</span>
                   <Input
@@ -294,10 +301,9 @@ export default function NewBill() {
                     className="w-28 text-right tabular"
                     value={discount}
                     onChange={(e) => setDiscount(e.target.value)}
-                    data-testid="summary-discount-input"
+                    data-testid="summary-discount"
                   />
                 </div>
-
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-slate-600">CGST %</span>
                   <Input
@@ -305,7 +311,6 @@ export default function NewBill() {
                     className="w-24 text-right tabular"
                     value={cgstRate}
                     onChange={(e) => setCgstRate(e.target.value)}
-                    data-testid="summary-cgst-input"
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -314,7 +319,6 @@ export default function NewBill() {
                     {formatINR(cgstAmount)}
                   </span>
                 </div>
-
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-slate-600">SGST %</span>
                   <Input
@@ -322,7 +326,6 @@ export default function NewBill() {
                     className="w-24 text-right tabular"
                     value={sgstRate}
                     onChange={(e) => setSgstRate(e.target.value)}
-                    data-testid="summary-sgst-input"
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -334,7 +337,7 @@ export default function NewBill() {
 
                 <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
                   <span className="font-display font-semibold">Grand Total</span>
-                  <span className="tabular font-display font-bold text-xl text-blue-700" data-testid="summary-grand-total">
+                  <span className="tabular font-display font-bold text-xl text-orange-600" data-testid="summary-grand-total">
                     {formatINR(grandTotal)}
                   </span>
                 </div>
@@ -344,14 +347,14 @@ export default function NewBill() {
                 onClick={submit}
                 disabled={saving || hasOverstock}
                 data-testid="save-bill-btn"
-                className="w-full mt-5 bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full mt-5 bg-orange-500 hover:bg-orange-600 text-white"
               >
                 <Save className="h-4 w-4 mr-1" />
                 {saving ? "Saving..." : "Save & Print Bill"}
               </Button>
 
               <div className="text-xs text-slate-500 mt-3 text-center">
-                Saving will auto-deduct stock from inventory and open the 3-copy print view.
+                Saves invoice to Billing sheet and posts Sale transactions to Inventory sheet.
               </div>
             </CardContent>
           </Card>

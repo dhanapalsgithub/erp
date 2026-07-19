@@ -1,133 +1,198 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, formatINR, formatDate } from "@/lib/api";
+import { sheets, formatINR, formatDate } from "@/lib/sheets";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Printer, Trash2, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Printer, Trash2, Search, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export default function BillingList() {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [q, setQ] = useState("");
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    const { data } = await api.get("/invoices");
-    setInvoices(data);
+    setLoading(true);
+    try {
+      const data = await sheets.list("Billing");
+      setInvoices(data.sort((a, b) => new Date(b.date) - new Date(a.date)));
+    } catch (e) {
+      toast.error(e.message || "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => {
     load();
   }, []);
 
   const remove = async (id) => {
-    if (!window.confirm("Delete this invoice? Stock will be restored.")) return;
-    await api.delete(`/invoices/${id}`);
-    toast.success("Invoice deleted, stock restored");
-    load();
+    if (!window.confirm("Delete this invoice? (Note: stock in the Inventory sheet will NOT be automatically restored)")) return;
+    try {
+      await sheets.remove("Billing", id);
+      toast.success("Invoice deleted");
+      load();
+    } catch (e) {
+      toast.error(e.message || "Delete failed");
+    }
+  };
+
+  const exportCSV = () => {
+    const cols = ["invoice_no", "date", "customer_name", "subtotal", "cgst_amount", "sgst_amount", "grand_total", "payment_status"];
+    const header = cols.join(",");
+    const body = invoices
+      .map((r) => cols.map((c) => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([header + "\n" + body], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "Billing.csv";
+    a.click();
   };
 
   const filtered = invoices.filter((i) => {
     const t = q.toLowerCase();
     return (
       !t ||
-      i.invoice_no.toLowerCase().includes(t) ||
-      i.customer_snapshot?.name?.toLowerCase().includes(t)
+      String(i.invoice_no || "").toLowerCase().includes(t) ||
+      String(i.customer_name || "").toLowerCase().includes(t)
     );
   });
 
   return (
     <div className="space-y-6" data-testid="billing-list-page">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <div className="font-display text-2xl font-semibold">Billing</div>
-          <div className="text-sm text-slate-500">All invoices with print & total summary</div>
+          <div className="text-orange-600 text-xs uppercase tracking-widest font-semibold">Overview</div>
+          <h1 className="font-display text-3xl font-semibold">Billing</h1>
+          <p className="text-slate-600 mt-1 text-sm">
+            GST invoices with total summary and 3-copy print. Saving an invoice auto-posts a Sale
+            transaction to the Inventory sheet.
+          </p>
         </div>
-        <Button
-          onClick={() => navigate("/billing/new")}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          data-testid="new-bill-btn"
-        >
-          <Plus className="h-4 w-4 mr-1" /> New Bill
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={exportCSV}>
+            <Download className="h-4 w-4 mr-1" /> Export
+          </Button>
+          <Button
+            onClick={() => navigate("/billing/new")}
+            className="bg-orange-500 hover:bg-orange-600 text-white"
+            data-testid="new-bill-btn"
+          >
+            <Plus className="h-4 w-4 mr-1" /> Add New
+          </Button>
+        </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="h-4 w-4 absolute left-3 top-3 text-slate-400" />
-        <Input
-          data-testid="invoice-search"
-          className="pl-9"
-          placeholder="Search by invoice # or customer"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="shadow-sm border border-slate-200">
+          <CardContent className="p-5">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Total Invoices</div>
+            <div className="mt-2 font-display text-2xl font-semibold tabular">{invoices.length}</div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border border-slate-200">
+          <CardContent className="p-5">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Total Sales</div>
+            <div className="mt-2 font-display text-2xl font-semibold tabular">
+              {formatINR(invoices.reduce((s, i) => s + Number(i.grand_total || 0), 0))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border border-slate-200">
+          <CardContent className="p-5">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Pending Amount</div>
+            <div className="mt-2 font-display text-2xl font-semibold tabular text-orange-600">
+              {formatINR(
+                invoices
+                  .filter((i) => i.payment_status !== "Paid")
+                  .reduce((s, i) => s + Number(i.grand_total || 0), 0)
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="shadow-sm border border-slate-200">
-        <CardContent className="p-0">
-          <table className="w-full text-sm" data-testid="invoices-table">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr className="text-left text-slate-600">
-                <th className="py-3 px-4">Invoice #</th>
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4 text-right">Items</th>
-                <th className="py-3 px-4 text-right">Grand Total</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((inv) => (
-                <tr key={inv.id} className="border-b border-slate-100" data-testid={`invoice-row-${inv.invoice_no}`}>
-                  <td className="py-3 px-4 font-medium">{inv.invoice_no}</td>
-                  <td className="py-3 px-4">{formatDate(inv.created_at)}</td>
-                  <td className="py-3 px-4">{inv.customer_snapshot?.name}</td>
-                  <td className="py-3 px-4 text-right tabular">{inv.items?.length || 0}</td>
-                  <td className="py-3 px-4 text-right tabular font-semibold">
-                    {formatINR(inv.grand_total)}
-                  </td>
-                  <td className="py-3 px-4">
-                    <Badge
-                      className={
-                        inv.payment_status === "Paid"
-                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                          : inv.payment_status === "Partial"
-                          ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-100"
-                      }
-                    >
-                      {inv.payment_status}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link to={`/invoices/${inv.id}/print`} target="_blank" rel="noreferrer">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          data-testid={`print-invoice-${inv.invoice_no}`}
-                        >
-                          <Printer className="h-4 w-4 mr-1" /> Print
-                        </Button>
-                      </Link>
-                      <Button variant="ghost" size="sm" onClick={() => remove(inv.id)}>
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </div>
-                  </td>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="font-display text-lg font-semibold">Billing Register</div>
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
+              <Input
+                data-testid="invoice-search"
+                className="pl-9 w-64"
+                placeholder="Search invoice # or customer"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="invoices-table">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr className="text-left text-slate-500 uppercase text-[11px] tracking-wider">
+                  <th className="py-3 px-3">Invoice #</th>
+                  <th className="py-3 px-3">Date</th>
+                  <th className="py-3 px-3">Customer</th>
+                  <th className="py-3 px-3 text-right">Subtotal</th>
+                  <th className="py-3 px-3 text-right">GST</th>
+                  <th className="py-3 px-3 text-right">Grand Total</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3 text-right">Actions</th>
                 </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center text-slate-500 py-8">
-                    No invoices found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={8} className="py-8 text-center text-slate-500">Loading...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={8} className="py-8 text-center text-slate-500">No invoices yet.</td></tr>
+                ) : (
+                  filtered.map((inv) => (
+                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                      <td className="py-3 px-3 font-medium">{inv.invoice_no}</td>
+                      <td className="py-3 px-3">{formatDate(inv.date)}</td>
+                      <td className="py-3 px-3">{inv.customer_name}</td>
+                      <td className="py-3 px-3 text-right tabular">{formatINR(inv.subtotal)}</td>
+                      <td className="py-3 px-3 text-right tabular">
+                        {formatINR(Number(inv.cgst_amount || 0) + Number(inv.sgst_amount || 0))}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular font-semibold">
+                        {formatINR(inv.grand_total)}
+                      </td>
+                      <td className="py-3 px-3">
+                        <Badge className={
+                          inv.payment_status === "Paid"
+                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                            : inv.payment_status === "Partial"
+                            ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-100"
+                        }>
+                          {inv.payment_status}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link to={`/invoices/${inv.id}/print`} target="_blank" rel="noreferrer">
+                            <Button variant="outline" size="sm" data-testid={`print-invoice-${inv.invoice_no}`}>
+                              <Printer className="h-4 w-4 mr-1" /> Print
+                            </Button>
+                          </Link>
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => remove(inv.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>

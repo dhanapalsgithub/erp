@@ -1,46 +1,63 @@
-# BillBook — GST Billing & Inventory MVP
+# RapidTech Business ERP — Google Sheets Backend Edition
 
 ## Original Problem Statement
-> "i need bill menu need to total summary and able to print three copies one is original copy and dublicate copy triplacte copy and auto dedect stcok form inventrit table"
+> Round 1: "i need bill menu need to total summary and able to print three copies one is original copy and dublicate copy triplacte copy and auto dedect stcok form inventrit table"
+> Round 2: "make 11 componet for 11 menu and all menu have sheet in google sheet so google sheet is a backenf"
 
-## User Choices (confirmed via ask_human, defaults accepted)
-- Fresh full-stack app: FastAPI + React + MongoDB
-- GST invoice: Subtotal + CGST + SGST + Discount + Grand Total (INR)
-- Print three copies (Original / Duplicate / Triplicate) on separate pages in one print job
-- Auto-deduct stock on invoice save; warn on low stock
-- Currency: INR, GST tax
+## Architecture (v2)
+- **Backend**: 100% Google Sheets via a Google **Apps Script Web App** (`/app/apps-script/Code.gs`). No database, no FastAPI usage from the app. FastAPI process still runs but is unused by the frontend.
+- **Frontend**: React (Router + Shadcn UI + Tailwind). Talks to the Apps Script `/exec` URL directly. URL is stored in `localStorage`.
+- **Setup gate**: If the URL is not configured, every page except `/settings` shows a "Connect your Google Sheets backend" card.
 
-## Architecture
-- **Backend** (`/app/backend/server.py`): FastAPI + Motor (Mongo). Models: Product, Customer, Invoice with line items.
-  - Endpoints: `/api/products`, `/api/customers`, `/api/invoices` (create decrements stock atomically; delete restores stock), `/api/dashboard/stats`, `/api/seed` (idempotent).
-  - Amount-in-words in Indian numbering (Lakh/Crore).
-- **Frontend** (`/app/frontend/src`): React + React Router + Shadcn UI + Tailwind. Sidebar layout with pages: Dashboard, Inventory, Customers, Billing List, New Bill, Invoice Print (opens in new tab, renders 3 copies with `@media print` page-break-after: always).
+## 11 Menus (all live)
+1. Dashboard (aggregates stats from other sheets via `action=stats`)
+2. Production Log
+3. Inventory (stock ledger with opening/closing per transaction)
+4. Billing (retains 3-copy print + auto stock deduction)
+5. Purchase Entry
+6. Delivery Challan
+7. Staff Attendance
+8. CCTV
+9. Reports
+10. Expenses
+11. Settings (Apps Script URL configuration + setup guide)
+
+## Google Sheets sheets (auto-created on first API call)
+`ProductionLog`, `Inventory`, `Billing`, `PurchaseEntry`, `DeliveryChallan`, `StaffAttendance`, `CCTV`, `Reports`, `Expenses`, `Settings`.
+
+## Key Files
+- `/app/apps-script/Code.gs` — full Apps Script backend (paste into Sheet → Extensions → Apps Script)
+- `/app/apps-script/README.md` — 3-minute deploy guide
+- `/app/frontend/public/apps-script-code.gs` + `apps-script-readme.md` — downloadable copies linked from Settings page
+- `/app/frontend/src/lib/sheets.js` — service layer (fetch to Apps Script)
+- `/app/frontend/src/lib/modules.js` — declarative config for the 8 generic list modules (fields, stats, columns)
+- `/app/frontend/src/pages/GenericModule.jsx` — reusable module page (stats + register table + add/edit dialog + CSV export + pagination + search)
+- Billing pages (`BillingList.jsx`, `NewBill.jsx`, `InvoicePrint.jsx`) — retain 3-copy print + live total summary + auto-stock deduction via Sale transactions posted to Inventory sheet.
 
 ## User Personas
-- Small retailer / wholesaler needing GST-compliant invoices with physical 3-copy printing and simple stock tracking.
+- Small manufacturing / wholesale business owner who wants an ERP but keeps all data in a Google Sheet they can view/edit anytime.
 
 ## Core Requirements
-1. Bill menu with live **Total Summary** (Subtotal, Discount, CGST, SGST, Grand Total)
-2. Print **3 copies** (Original for Recipient / Duplicate for Transporter / Triplicate for Supplier)
-3. **Auto-detect / auto-deduct stock** from inventory table on invoice save
-4. Warn / block when quantity exceeds available stock
+1. 11 menu components, each tied to a Google Sheet ✓
+2. Bill menu with live total summary (Subtotal/CGST/SGST/Discount/Grand Total) ✓
+3. Print 3 copies (Original / Duplicate / Triplicate) ✓
+4. Auto stock deduction on invoice save ✓
+5. Google Sheets as backend (via Apps Script Web App) ✓
 
 ## Implemented (Feb 2026)
-- [x] Product inventory CRUD with low-stock badges
-- [x] Customer master (name, phone, GSTIN, address)
-- [x] Invoice creation with line items, live Total Summary panel
-- [x] Auto stock deduction on save + stock restore on invoice delete
-- [x] Overstock warning banner + disabled save when overstocked
-- [x] Printable 3-copy invoice (Original/Duplicate/Triplicate) with A4 print CSS
-- [x] Dashboard: total sales, invoice count, pending amount, low-stock alerts, recent invoices
-- [x] Amount in words (Indian numbering)
-- [x] Seed data (6 products, 3 customers) on startup
+- [x] 11-item sidebar (dark theme + orange accent, RapidTech look)
+- [x] Setup gate + Settings page for Apps Script URL
+- [x] Apps Script backend with generic CRUD + `createInvoice` (validates stock, deducts via Inventory `Sale` txn) + dashboard stats
+- [x] Generic module page powering 8 modules from a declarative config
+- [x] Billing with total summary + 3-copy print retained
+- [x] Auto stock deduction: `createInvoice` in Apps Script appends `Sale` transactions to Inventory sheet, updating closing_stock
+- [x] CSV export per module, search, pagination
 
 ## Backlog / Next Actions
-- P1: Concurrency-safe invoice numbering (atomic counter in Mongo)
-- P1: Edit invoice + payment recording (mark Partial → Paid, capture payment amount/date)
-- P2: Downloadable PDF invoice (server-side reportlab or client html2pdf)
-- P2: Purchases / stock-in workflow to increase inventory
-- P2: Multi-tenant auth (owner login) — currently open
-- P3: Reports: daily/monthly sales, top products, GST summary report
-- P3: WhatsApp/SMS invoice sharing (Twilio)
+- P1: **Test with a live Apps Script URL** (user must deploy the script and paste URL — cannot be tested end-to-end from this container without it)
+- P1: Per-module bulk import from CSV
+- P2: Emergent Google OAuth so each user connects their own sheet
+- P2: Rate/HSN master sheet so NewBill auto-fills price + tax from product
+- P2: PDF download of invoice (no browser print dialog)
+- P3: Payment recording (Partial → Paid with date + method) written back to Billing sheet
+- P3: Charts on Dashboard (monthly sales, production trends) using recharts
