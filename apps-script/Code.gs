@@ -58,24 +58,42 @@ function _ss() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
+function _findSheetLoose(ss, name) {
+  // getSheetByName can return null for names with trailing whitespace
+  // etc.  Do a tolerant match across all sheets.
+  const target = String(name).trim().toLowerCase();
+  const all = ss.getSheets();
+  for (let i = 0; i < all.length; i++) {
+    if (String(all[i].getName()).trim().toLowerCase() === target) return all[i];
+  }
+  return null;
+}
+
 function _ensureSheet(name) {
   const ss = _ss();
-  let sh = ss.getSheetByName(name);
   const headers = SHEETS[name];
   if (!headers) throw new Error('Unknown sheet: ' + name);
+  let sh = _findSheetLoose(ss, name);
   if (!sh) {
-    sh = ss.insertSheet(name);
+    try {
+      sh = ss.insertSheet(name);
+    } catch (e) {
+      // Race or hidden-sheet case — try locating again
+      sh = _findSheetLoose(ss, name);
+      if (!sh) throw e;
+    }
     sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sh.setFrozenRows(1);
-  } else {
-    const existing = sh.getRange(1, 1, 1, Math.max(headers.length, sh.getLastColumn())).getValues()[0];
-    // Add missing headers
-    headers.forEach((h, i) => {
-      if (existing[i] !== h) {
-        sh.getRange(1, i + 1).setValue(h).setFontWeight('bold');
-      }
-    });
+    return sh;
   }
+  // Ensure headers on existing sheet
+  const lastCol = Math.max(headers.length, sh.getLastColumn() || 1);
+  const existing = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  headers.forEach((h, i) => {
+    if (existing[i] !== h) {
+      sh.getRange(1, i + 1).setValue(h).setFontWeight('bold');
+    }
+  });
   return sh;
 }
 
