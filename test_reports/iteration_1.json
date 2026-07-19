@@ -1,0 +1,19 @@
+{
+  "summary": "Backend (6/6 pytest passing) and Frontend (all key flows) tested for Billing & Inventory MVP. All features work: seeded products/customers, product CRUD, invoice creation with GST math (₹300 subtotal → CGST 27 + SGST 27 = ₹354), stock auto-deduct on save, stock restore on delete, insufficient-stock 400, overstock warning + disabled save, 3-copy print view with Original/Duplicate/Triplicate labels and print button, live Total Summary, dashboard stats and low-stock alerts.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "/api/invoices", "issue": "_next_invoice_no uses count_documents+1 which can produce duplicate invoice_no after deletions or with concurrent requests. Consider using an atomic counter collection (findAndModify $inc)."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Invoice numbering (server.py:_next_invoice_no) is not concurrency-safe and can collide after invoice deletion. Move to atomic counter document.",
+    "MongoDB Motor client is initialized at module import; fine for dev but consider startup event and connection pooling settings for prod."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Backend auto-seeds 6 products and 3 customers via /api/seed and startup hook (idempotent). Tests created and cleaned up TEST_ prefixed items.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py exists at /app/backend/tests/. Frontend uses data-testid attributes matching the spec: customer-select, line-product-select-0, line-qty-input-0, summary-*, save-bill-btn, overstock-warning, print-btn. Print page opens in new tab via window.open."
+}

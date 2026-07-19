@@ -1,34 +1,77 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Base app font stack (Swiss & High-Contrast) */
+html,
+body,
+#root {
+  height: 100%;
+  background: #f8fafc;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+body {
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  color: #0f172a;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.01em;
 }
 
-.App-link {
-    color: #61dafb;
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* -------------------- PRINT STYLES -------------------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  html,
+  body,
+  #root {
+    background: #ffffff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color: #000 !important;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  .print-area {
+    display: block !important;
+  }
+
+  .print-copy {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-copy:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .print-invoice-card {
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .print-invoice-card table {
+    border-collapse: collapse !important;
+  }
+
+  .print-invoice-card table th,
+  .print-invoice-card table td {
+    border: 1px solid #000 !important;
+    padding: 6px 8px !important;
+  }
 }
