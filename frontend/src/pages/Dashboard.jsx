@@ -4,12 +4,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   IndianRupee, FileText, AlertTriangle, Boxes, Wallet, Factory,
+  TrendingUp, TrendingDown, ClipboardList, DollarSign, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState("");
+  
+  // Pagination State
+  const [recordPage, setRecordPage] = useState(1);
+  const rowsPerPage = 5;
 
   useEffect(() => {
     sheets
@@ -27,111 +32,128 @@ export default function Dashboard() {
     );
   }
 
-  const cards = [
+  // நிதி கணக்கீடுகள்
+  const grossTotal = stats?.monthly_gross || 0;
+  const totalExpense = stats?.monthly_expense || 0;
+  const netProfit = grossTotal - totalExpense;
+
+  // Pagination Logic for Monthly Records
+  const monthlyRecords = stats?.monthly_records || [];
+  const totalRecordPages = Math.ceil(monthlyRecords.length / rowsPerPage);
+  const paginatedRecords = monthlyRecords.slice(
+    (recordPage - 1) * rowsPerPage,
+    recordPage * rowsPerPage
+  );
+
+  const summaryCards = [
+    { label: "Monthly Gross", value: formatINR(grossTotal), icon: TrendingUp, tone: "text-emerald-600" },
+    { label: "Expenses", value: formatINR(totalExpense), icon: TrendingDown, tone: "text-red-600" },
+    { label: "Net Profit", value: formatINR(netProfit), icon: DollarSign, tone: "text-orange-600" },
+    { label: "Monthly DC Count", value: stats?.monthly_dc_count ?? 0, icon: ClipboardList, tone: "text-blue-600" },
+  ];
+
+  const statCards = [
     { label: "Total Sales", value: formatINR(stats?.total_sales || 0), icon: IndianRupee, tone: "text-orange-600" },
     { label: "Total Invoices", value: stats?.total_invoices ?? 0, icon: FileText, tone: "text-blue-600" },
     { label: "Pending Amount", value: formatINR(stats?.pending_amount || 0), icon: Wallet, tone: "text-amber-600" },
-    { label: "Low Stock Items", value: stats?.low_stock_count ?? 0, icon: AlertTriangle, tone: "text-red-600" },
-    { label: "Total Production (kgs)", value: (stats?.total_production ?? 0).toLocaleString("en-IN"), icon: Factory, tone: "text-emerald-600" },
-    { label: "Products Tracked", value: stats?.inventory_products ?? 0, icon: Boxes, tone: "text-slate-700" },
+    { label: "Low Stock", value: stats?.low_stock_count ?? 0, icon: AlertTriangle, tone: "text-red-600" },
+    { label: "Total Production", value: `${(stats?.total_production ?? 0).toLocaleString("en-IN")} kgs`, icon: Factory, tone: "text-emerald-600" },
+    { label: "Products", value: stats?.inventory_products ?? 0, icon: Boxes, tone: "text-slate-700" },
   ];
 
   return (
     <div className="space-y-6" data-testid="dashboard-page">
-      <div>
-        <div className="text-orange-600 text-xs uppercase tracking-widest font-semibold">Overview</div>
-        <h1 className="font-display text-3xl font-semibold">Dashboard</h1>
-        <p className="text-slate-600 mt-1 text-sm">Live snapshot from your Google Sheets backend.</p>
+      {/* நிதி சுருக்கம் */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {summaryCards.map((c) => (
+          <Card key={c.label} className="border-t-4 border-t-slate-300">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500 uppercase">{c.label}</p>
+                <p className="text-xl font-bold mt-1">{c.value}</p>
+              </div>
+              <c.icon className={`h-6 w-6 ${c.tone}`} />
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {cards.map((c) => {
-          const Icon = c.icon;
-          return (
-            <Card key={c.label} className="shadow-sm border border-slate-200">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">{c.label}</div>
-                    <div className="mt-2 font-display text-2xl font-semibold tabular">{c.value}</div>
-                  </div>
-                  <div className={`p-2 rounded-md bg-slate-50 ${c.tone}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      {/* மற்ற புள்ளிவிவரங்கள் */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {statCards.map((c) => (
+          <Card key={c.label} className="shadow-sm">
+            <CardContent className="p-4 text-center">
+              <c.icon className={`h-5 w-5 mx-auto ${c.tone}`} />
+              <div className="text-sm font-semibold mt-2">{c.value}</div>
+              <div className="text-[10px] text-slate-500 uppercase">{c.label}</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 shadow-sm border border-slate-200">
+        {/* Monthly Records Table with Pagination */}
+        <Card className="lg:col-span-2 shadow-sm">
           <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="font-display text-lg font-semibold">Recent Invoices</div>
-                <div className="text-sm text-slate-500">Last 5 bills from the Billing sheet</div>
-              </div>
-              <Link to="/billing" className="text-sm text-orange-600 hover:underline">View all</Link>
-            </div>
+            <h3 className="font-display text-lg font-semibold mb-4">Monthly Bills & DC Records</h3>
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left border-b border-slate-200 text-slate-500 uppercase text-[11px] tracking-wider">
-                  <th className="py-2">Invoice #</th>
-                  <th className="py-2">Customer</th>
+                <tr className="text-left text-slate-500 uppercase text-[11px] border-b">
                   <th className="py-2">Date</th>
+                  <th className="py-2">Ref #</th>
+                  <th className="py-2">Type</th>
                   <th className="py-2 text-right">Amount</th>
-                  <th className="py-2">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {(stats?.recent_invoices || []).map((inv) => (
-                  <tr key={inv.id} className="border-b border-slate-100">
-                    <td className="py-2 font-medium">{inv.invoice_no}</td>
-                    <td className="py-2">{inv.customer_name}</td>
-                    <td className="py-2">{formatDate(inv.date)}</td>
-                    <td className="py-2 text-right tabular">{formatINR(inv.grand_total)}</td>
-                    <td className="py-2">
-                      <Badge className={
-                        inv.payment_status === "Paid"
-                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                          : inv.payment_status === "Partial"
-                          ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-100"
-                      }>
-                        {inv.payment_status}
-                      </Badge>
-                    </td>
+                {paginatedRecords.map((rec, i) => (
+                  <tr key={i} className="border-b">
+                    <td className="py-2">{formatDate(rec.date)}</td>
+                    <td className="py-2 font-medium">{rec.ref_no}</td>
+                    <td className="py-2"><Badge variant="outline">{rec.type}</Badge></td>
+                    <td className="py-2 text-right">{formatINR(rec.amount)}</td>
                   </tr>
                 ))}
-                {(!stats?.recent_invoices || stats.recent_invoices.length === 0) && (
-                  <tr><td colSpan={5} className="py-6 text-center text-slate-500">No invoices yet.</td></tr>
-                )}
               </tbody>
             </table>
+            
+            {/* Pagination Controls */}
+            <div className="flex justify-between items-center mt-4">
+              <span className="text-xs text-slate-500">Page {recordPage} of {totalRecordPages || 1}</span>
+              <div className="flex gap-2">
+                <button 
+                  disabled={recordPage === 1}
+                  onClick={() => setRecordPage(p => p - 1)}
+                  className="p-1 border rounded hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button 
+                  disabled={recordPage >= totalRecordPages}
+                  onClick={() => setRecordPage(p => p + 1)}
+                  className="p-1 border rounded hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border border-slate-200">
+        {/* Low Stock Alerts */}
+        <Card className="shadow-sm">
           <CardContent className="p-5">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-red-600" />
-              <div className="font-display text-lg font-semibold">Low Stock Alerts</div>
+              <div className="font-display text-lg font-semibold">Low Stock</div>
             </div>
             <div className="space-y-3">
               {(stats?.low_stock_items || []).map((p) => (
-                <div key={p.product_id} className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <div>
-                    <div className="font-medium">{p.product_name}</div>
-                    <div className="text-xs text-slate-500">{p.product_id}</div>
-                  </div>
-                  <Badge className="bg-red-100 text-red-700 hover:bg-red-100">{p.stock} left</Badge>
+                <div key={p.product_id} className="flex justify-between border-b pb-2">
+                  <span>{p.product_name}</span>
+                  <Badge variant="destructive">{p.stock} left</Badge>
                 </div>
               ))}
-              {(!stats?.low_stock_items || stats.low_stock_items.length === 0) && (
-                <div className="text-sm text-slate-500">All items are well-stocked.</div>
-              )}
             </div>
           </CardContent>
         </Card>

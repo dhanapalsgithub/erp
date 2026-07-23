@@ -13,11 +13,13 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Download, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Download, Search, Pencil, Trash2, Printer } from "lucide-react";
 import { toast } from "sonner";
+
 
 const badgeCls = (val) => {
   const v = String(val || "").toLowerCase();
+
   if (["completed", "paid", "delivered", "online", "present"].includes(v))
     return "bg-emerald-100 text-emerald-700 hover:bg-emerald-100";
   if (["pending", "in progress", "in transit", "half day", "maintenance", "partial"].includes(v))
@@ -39,19 +41,28 @@ export default function GenericModule({ moduleKey }) {
   const cfg = MODULES[moduleKey];
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [inventory, setInventory] = useState([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({});
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 5;
 
   const load = async () => {
     setLoading(true);
     try {
       const data = await sheets.list(cfg.sheet);
-      setRows(data);
+
+      // மாற்றப்பட்ட வரிசை: புதிய என்ட்ரி முதலில் இருக்கும்
+      setRows(data.reverse());
+
+      // இன்வென்ட்ரி தேவைப்படும் மாட்யூல்களுக்கு (ProductionLog போன்றவை)
+      if (moduleKey === "ProductionLog") {
+        const invData = await sheets.list("Inventory");
+        setInventory(invData.reverse()); // இதையும் அப்படியே ரிவர்ஸ் செய்யலாம்
+      }
     } catch (e) {
       toast.error(e.message || "Failed to load");
     } finally {
@@ -193,11 +204,10 @@ export default function GenericModule({ moduleKey }) {
             <Card key={i} className="shadow-sm border border-slate-200">
               <CardContent className="p-5">
                 <div className="text-xs uppercase tracking-wide text-slate-500">{s.label}</div>
-                <div className={`mt-2 font-display text-2xl font-semibold tabular ${
-                  s.tone === "warning" ? "text-orange-600"
+                <div className={`mt-2 font-display text-2xl font-semibold tabular ${s.tone === "warning" ? "text-orange-600"
                   : s.tone === "success" ? "text-emerald-600"
-                  : "text-slate-900"
-                }`}>
+                    : "text-slate-900"
+                  }`}>
                   {s.value}
                 </div>
               </CardContent>
@@ -215,6 +225,7 @@ export default function GenericModule({ moduleKey }) {
               <Button variant="outline" size="sm" onClick={exportCSV}>
                 <Download className="h-4 w-4 mr-1" /> Export
               </Button>
+
               <div className="relative">
                 <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
                 <Input
@@ -224,6 +235,8 @@ export default function GenericModule({ moduleKey }) {
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
+
+
               </div>
             </div>
           </div>
@@ -254,10 +267,24 @@ export default function GenericModule({ moduleKey }) {
                         </td>
                       ))}
                       <td className="py-3 px-3 text-right">
+
                         <div className="flex items-center justify-end gap-1">
                           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openEdit(r)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
+
+                          {/* dc மற்றும் bill மாட்யூல்களில் மட்டும் பிரிண்ட் பட்டன் காட்டும் */}
+                          {(moduleKey === "DeliveryChallan" || moduleKey === "Billing") && (
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => window.open(`/print/dc/${r.id}`, '_blank')}
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+
                           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => remove(r.id)}>
                             <Trash2 className="h-3.5 w-3.5 text-red-600" />
                           </Button>
@@ -298,6 +325,7 @@ export default function GenericModule({ moduleKey }) {
             {cfg.fields.map((f) => (
               <div key={f.key} className={f.type === "textarea" ? "sm:col-span-2" : ""}>
                 <Label>{f.label}{f.required && <span className="text-red-500 ml-1">*</span>}</Label>
+
                 {f.type === "textarea" ? (
                   <Textarea
                     value={form[f.key] || ""}
@@ -308,13 +336,31 @@ export default function GenericModule({ moduleKey }) {
                     value={form[f.key] || ""}
                     onValueChange={(v) => setForm({ ...form, [f.key]: v })}
                   >
-                    <SelectTrigger data-testid={`field-${f.key}`}>
+                    <SelectTrigger>
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
                       {f.options.map((o) => (
                         <SelectItem key={o} value={o}>{o}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                ) : f.type === "product_select" ? (
+                  <Select
+                    value={form[f.key] || ""}
+                    onValueChange={(v) => setForm({ ...form, [f.key]: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inventory
+                        .filter((r, i, self) => i === self.findIndex((t) => t.product_name === r.product_name))
+                        .map((p) => (
+                          <SelectItem key={p.id} value={p.product_name}>
+                            {p.product_name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 ) : (
@@ -342,6 +388,6 @@ export default function GenericModule({ moduleKey }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

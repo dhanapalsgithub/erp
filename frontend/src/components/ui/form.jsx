@@ -1,9 +1,11 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { Controller, FormProvider, useFormContext } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 
 const Form = FormProvider
 
@@ -121,6 +123,48 @@ const FormMessage = React.forwardRef(({ className, children, ...props }, ref) =>
 })
 FormMessage.displayName = "FormMessage"
 
+const FormSelect = React.forwardRef(({ className, options, placeholder, ...props }, ref) => {
+  const { formItemId, formDescriptionId, formMessageId, error } = useFormField();
+
+  return (
+    <select
+      ref={ref}
+      id={formItemId}
+      aria-describedby={!error ? `${formDescriptionId}` : `${formDescriptionId} ${formMessageId}`}
+      aria-invalid={!!error}
+      className={cn(
+        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
+      {...props}
+    >
+      <option value="">{placeholder || "Select an option"}</option>
+      {options.map((opt) => (
+        <option key={opt.value || opt} value={opt.value || opt}>
+          {opt.label || opt}
+        </option>
+      ))}
+    </select>
+  );
+});
+FormSelect.displayName = "FormSelect";
+
+const FormBackButton = ({ onClick, children, className, ...props }) => {
+  const navigate = useNavigate();
+  return (
+    <Button
+      variant="outline"
+      type="button"
+      onClick={onClick || (() => navigate(-1))}
+      className={cn("mt-4 w-full", className)}
+      {...props}
+    >
+      {children || "Back"}
+    </Button>
+  );
+};
+FormBackButton.displayName = "FormBackButton";
+
 export {
   useFormField,
   Form,
@@ -130,4 +174,6 @@ export {
   FormDescription,
   FormMessage,
   FormField,
+  FormSelect,
+  FormBackButton,
 }

@@ -8,9 +8,23 @@ export const MODULES = {
     sheet: "ProductionLog",
     fields: [
       { key: "date", label: "Date", type: "date", required: true },
-      { key: "machine", label: "Machine", type: "text", required: true },
-      { key: "operator", label: "Operator", type: "text" },
-      { key: "product", label: "Product", type: "text", required: true },
+      // Dropdown for Machines
+      { 
+        key: "machine", 
+        label: "Machine", 
+        type: "select", 
+        options: ["Extrude 1", "Extrude 2", "Cutting Machine"], 
+        required: true 
+      },
+      // Dropdown for Operators
+      { 
+        key: "operator", 
+        label: "Operator", 
+        type: "select", 
+        options: ["Arun", "Ravi", "Varun"] 
+      },
+      // Product fetching from inventory (Type: product_select)
+      { key: "product", label: "Product", type: "product_select", required: true },
       { key: "qty", label: "Qty (kgs)", type: "number" },
       { key: "waste", label: "Waste (kgs)", type: "number" },
       { key: "status", label: "Status", type: "select", options: ["In Progress", "Completed", "On Hold"] },
@@ -31,6 +45,24 @@ export const MODULES = {
       { key: "status", label: "Status", badge: true },
     ],
   },
+
+  // lib/modules.js கோப்பில் இதைச் சேர்க்கவும்
+Attendance: {
+  label: "Staff Attendance",
+  sheet: "Attendance",
+  columns: [
+    { key: "staff_name", label: "Staff Name" },
+    { key: "date", label: "Date", format: "date" },
+    { key: "branch", label: "Branch" },
+    { key: "status", label: "Status", badge: true },
+  ],
+  fields: [
+    { key: "staff_name", label: "Staff Name", required: true },
+    { key: "date", label: "Date", type: "date", required: true },
+    { key: "branch", label: "Branch", type: "select", options: ["Branch A", "Branch B"], required: true },
+    { key: "status", label: "Status", type: "select", options: ["Present", "Absent", "Half Day"], required: true },
+  ]
+},
 
   Inventory: {
     label: "Inventory",

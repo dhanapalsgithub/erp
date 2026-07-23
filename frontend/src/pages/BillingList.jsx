@@ -5,7 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Printer, Trash2, Search, Download } from "lucide-react";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { Plus, Printer, Trash2, Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export default function BillingList() {
@@ -13,6 +20,10 @@ export default function BillingList() {
   const [invoices, setInvoices] = useState([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 5;
 
   const load = async () => {
     setLoading(true);
@@ -25,9 +36,25 @@ export default function BillingList() {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     load();
   }, []);
+
+  // Reset page to 1 whenever search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [q]);
+
+  const updateStatus = async (id, newStatus) => {
+    try {
+      await sheets.update("Billing", id, { payment_status: newStatus });
+      toast.success("Status updated successfully");
+      load(); 
+    } catch (e) {
+      toast.error("Failed to update status");
+    }
+  };
 
   const remove = async (id) => {
     if (!window.confirm("Delete this invoice? (Note: stock in the Inventory sheet will NOT be automatically restored)")) return;
@@ -53,6 +80,7 @@ export default function BillingList() {
     a.click();
   };
 
+  // Filtering Logic
   const filtered = invoices.filter((i) => {
     const t = q.toLowerCase();
     return (
@@ -61,6 +89,13 @@ export default function BillingList() {
       String(i.customer_name || "").toLowerCase().includes(t)
     );
   });
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filtered.length / rowsPerPage);
+  const paginatedInvoices = filtered.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
 
   return (
     <div className="space-y-6" data-testid="billing-list-page">
@@ -150,9 +185,9 @@ export default function BillingList() {
                 {loading ? (
                   <tr><td colSpan={8} className="py-8 text-center text-slate-500">Loading...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="py-8 text-center text-slate-500">No invoices yet.</td></tr>
+                  <tr><td colSpan={8} className="py-8 text-center text-slate-500">No invoices found.</td></tr>
                 ) : (
-                  filtered.map((inv) => (
+                  paginatedInvoices.map((inv) => (
                     <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/60">
                       <td className="py-3 px-3 font-medium">{inv.invoice_no}</td>
                       <td className="py-3 px-3">{formatDate(inv.date)}</td>
@@ -165,15 +200,19 @@ export default function BillingList() {
                         {formatINR(inv.grand_total)}
                       </td>
                       <td className="py-3 px-3">
-                        <Badge className={
-                          inv.payment_status === "Paid"
-                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                            : inv.payment_status === "Partial"
-                            ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-100"
-                        }>
-                          {inv.payment_status}
-                        </Badge>
+                        <Select 
+                          value={inv.payment_status} 
+                          onValueChange={(val) => updateStatus(inv.id, val)}
+                        >
+                          <SelectTrigger className="w-[110px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Pending">Pending</SelectItem>
+                            <SelectItem value="Partial">Partial</SelectItem>
+                            <SelectItem value="Paid">Paid</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -193,6 +232,33 @@ export default function BillingList() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {filtered.length > rowsPerPage && (
+            <div className="flex items-center justify-between mt-4 px-2">
+              <p className="text-xs text-slate-500">
+                Showing {Math.min((currentPage - 1) * rowsPerPage + 1, filtered.length)} - {Math.min(currentPage * rowsPerPage, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

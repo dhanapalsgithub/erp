@@ -1,18 +1,18 @@
 // Google Apps Script service layer
 const URL_KEY = "rapidtech_sheets_url";
 
+// நிரந்தரமான URL-ஐ இங்கே பதிவிடவும்
+const PERMANENT_URL = "https://script.google.com/macros/s/AKfycbwhLg8cnSYx9uMD7UFsImlmIGSZEN4U19gg7VMJbSZZzgtyBLaH3vDqGqrtYhFyNjji/exec";
+
 export const getSheetsUrl = () => {
-  try {
-    return localStorage.getItem(URL_KEY) || "";
-  } catch {
-    return "";
-  }
+  // எப்போதும் நிரந்தரமான URL-ஐயே திருப்பி அனுப்பும்
+  return PERMANENT_URL;
 };
 
 export const setSheetsUrl = (url) => {
+  // இந்த செயல்பாடு இனி தேவையில்லை, ஆனால் பிழை வராமல் இருக்க இப்படி விடலாம்
   localStorage.setItem(URL_KEY, url.trim());
 };
-
 const _post = async (payload) => {
   const url = getSheetsUrl();
   if (!url) throw new Error("Google Sheets URL not configured. Go to Settings.");
@@ -47,7 +47,8 @@ export const sheets = {
   create: (sheet, data) => _post({ action: "create", sheet, data }),
   update: (sheet, id, data) => _post({ action: "update", sheet, id, data }),
   remove: (sheet, id) => _post({ action: "delete", sheet, id }),
-  addInventoryTxn: (data) => _post({ action: "inventoryTxn", data }),
+  // lib/sheets.js கோப்பில்:
+  addInventoryTxn: (data) => _post({ action: "addInventoryTxn", data }), // இங்கே "addInventoryTxn" என மாற்றவும்
   createInvoice: (data) => _post({ action: "createInvoice", data }),
 };
 

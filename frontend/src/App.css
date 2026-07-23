@@ -64,3 +64,9 @@ h1, h2, h3, h4, h5, h6, .font-display {
     padding: 6px 8px !important;
   }
 }
+@media print {
+  .no-print { display: none; }
+  .print-copy {
+    page-break-after: always;
+  }
+}
