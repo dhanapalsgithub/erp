@@ -5,8 +5,8 @@
       "destination": "/manifest.json"
     },
     {
-      "source": "/logo-copy1.png",
-      "destination": "/logo-copy1.png"
+      "source": "/logo.png",
+      "destination": "/logo.png"
     }
   ],
   "headers": [
