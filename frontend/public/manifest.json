@@ -1,15 +1,10 @@
 {
-  "short_name": "Rapid Tech",
-  "name": "Rapid Tech ERP",
+  "short_name": "Rapid Teck",
+  "name": "Rapid Teck | ERP",
   "icons": [
     {
-      "src": "logo-copy1.png",
+      "src": "/logo-copy1.png", 
       "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "logo-copy1.png",
-      "sizes": "512x512",
       "type": "image/png"
     }
   ],
