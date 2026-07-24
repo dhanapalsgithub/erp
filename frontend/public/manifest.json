@@ -3,7 +3,7 @@
   "name": "Rapid Tech | ERP",
   "icons": [
     {
-      "src": "/logo-copy1.png", 
+      "src": "/frontend/logo-copy1.png", 
       "sizes": "192x192",
       "type": "image/png"
     }
