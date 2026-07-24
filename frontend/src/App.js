@@ -81,7 +81,7 @@ function App() {
   </Routes>
   
   <Toaster position="top-right" richColors />
-</BrowserRouter>
+</BrowserRouter>8c2ba8dd
   );
 }
 
