@@ -1,0 +1,14 @@
+{
+  "rewrites": [
+    { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/logo-copy1.png", "destination": "/logo-copy1.png" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)\\.(json|png)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    }
+  ]
+}
